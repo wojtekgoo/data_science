@@ -23,7 +23,7 @@ binomialGLMUI <- function(id) {
             # split into train and test sets
             h4("Allocate observations to the train set"),
             fluidRow(
-              textInput(ns("TI_trainSet"), "train set %", width = '100px')
+              textInput(ns("TI_trainSet"), "train set %", width = '100px', value = "70")
             ),
             
             tags$hr(style ="border-top: 1px solid #888888;"),
@@ -129,7 +129,7 @@ binomialGLM <- function(input, output, session, dataset, id) {
       "Variable Importance"
     })
     
-    predictions = predict.train(model, newdata = test_set)
+    predictions = predict(model, newdata = test_set)
 
     # return results
     x = list(model = model, pred = predictions, test_set = test_set)

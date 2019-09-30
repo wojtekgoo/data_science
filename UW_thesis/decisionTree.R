@@ -31,7 +31,7 @@ decisionTreeUI <- function(id) {
             # split into train and test sets
             h4("Allocate observations to the train set"),
             fluidRow(
-              textInput(ns("TI_trainSet"), "train set %", width = '100px')
+              textInput(ns("TI_trainSet"), "train set %", width = '100px', value = "70")
             ),
             
             tags$hr(style ="border-top: 1px solid #888888;"),
@@ -166,7 +166,7 @@ decisionTree <- function(input, output, session, dataset, id) {
                                             cp = ifelse(input$TI_cp == "", 0.001, as.numeric(input$TI_cp)),
                                             xval = xval
                                             ))
-      predictions = predict.train(model, newdata = test_set)
+      predictions = predict(model, newdata = test_set)
     }
     
     output$TO_summaryLabel = renderText({
