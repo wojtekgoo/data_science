@@ -35,9 +35,9 @@ ggPairs <- function(input, output, session, id, dataset = NULL) {
   output$PO_ggpairs = renderPlot({
     req(dataset())
     val = dataset()
-    levels = sapply(dataset(), check_levels())
     
     if(input$CB_stopRefreshing == FALSE) {
+      levels = sapply(dataset(), check_levels)
       if(levels < 6) {
         ggpairs(val) + ggplot2::theme(axis.text = ggplot2::element_text(size = 3))
       }
