@@ -364,7 +364,9 @@ server = function(input, output, session) {
                     header = input$CB_header,
                     sep = input$sep,
                     quote = input$quote,
-                    stringsAsFactors = input$CB_stringsAsFactors)
+                    stringsAsFactors = input$CB_stringsAsFactors,
+                    row.names = 1,
+                    check.names = FALSE)
             },
             error = function(e) {
                 # return a safeError if a parsing error occurs
@@ -611,7 +613,7 @@ server = function(input, output, session) {
     # save dataset to CSV file
     observeEvent(input$BTN_saveDataset, {
       temp = df$x
-      write.csv(temp, file = "exportedDataset.csv")
+      write.csv(temp, file = "exportedDataset.csv", quote = FALSE)
     })
     
 } #  end of server function
