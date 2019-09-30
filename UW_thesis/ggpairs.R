@@ -38,8 +38,12 @@ ggPairs <- function(input, output, session, id, dataset = NULL) {
     
     if(input$CB_stopRefreshing == FALSE) {
       levels = sapply(dataset(), check_levels)
-      if(levels < 6) {
+      if(all(levels < 6)) {
         ggpairs(val) + ggplot2::theme(axis.text = ggplot2::element_text(size = 3))
+      } else { # print empty plot with text output only
+        plot(c(0, 1), c(0, 1), ann = F, bty = 'n', type = 'n', xaxt = 'n', yaxt = 'n')
+        text(x = 0.5, y = 0.5, paste("Some columns have more than 6 levels. Plot will not be printed."), 
+                              cex = 1.6, col = "black")
       }
     }
   })
