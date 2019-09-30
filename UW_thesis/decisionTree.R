@@ -50,12 +50,6 @@ decisionTreeUI <- function(id) {
             
             fluidRow(
               actionButton(ns("BTN_fitModel"), "Fit model")
-            ),
-            
-            tags$hr(style ="border-top: 1px solid #888888;"),
-
-            fluidRow(
-              uiOutput(ns("UI_saveModel"))
             )
             
           ),
@@ -182,10 +176,6 @@ decisionTree <- function(input, output, session, dataset, id) {
     output$TO_cpLabel = renderText({
       "Complexity parameter"
     })
-    
-    output$UI_saveModel = renderUI({
-      actionButton(ns('BTN_saveModel'), 'Save model to file')
-    })
    
 
     # return results
@@ -216,8 +206,4 @@ decisionTree <- function(input, output, session, dataset, id) {
    rpart.plot(myModel()$model, fallen.leaves = TRUE)
   })
 
-  observeEvent(input$BTN_saveModel, {
-    ml = myModel()$model
-    try( save(ml, file = file.choose(new = TRUE)) )
-  })
 }
