@@ -198,9 +198,14 @@ decisionTree <- function(input, output, session, dataset, id) {
     try( plotcp(myModel()$model) )
   })
     
-  output$TO_predictedValues = renderTable({
-    data.frame("Names" = rownames(myModel()$test_set), "Predictions" = myModel()$pred, "Actuals" = myModel()$test_set[input$SI_dependentVar][ , 1], stringsAsFactors = FALSE)
-  })
+  #output$TO_predictedValues = renderTable({
+  output$TO_predictedValues = function() {
+    result = data.frame("Names" = rownames(myModel()$test_set), "Predictions" = myModel()$pred, "Actuals" = myModel()$test_set[input$SI_dependentVar][ , 1], stringsAsFactors = FALSE)
+    result = as.tibble(result)
+    result %>%
+      knitr::kable(format = "html", escape = FALSE, digits = 2) %>%
+      kable_styling(bootstrap_options = c("striped", "hover", "condensed"))  
+  }
   
   output$PO_rpartPlot = renderPlot({
    rpart.plot(myModel()$model, fallen.leaves = TRUE)

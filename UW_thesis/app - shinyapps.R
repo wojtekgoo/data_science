@@ -1,52 +1,31 @@
-
 # Author: Wojciech Gusztyla
 
 ####### PACKAGES #######
-# check if package is installed. If not, then install it (-> avoid duplicate installation of pkgs)
-pkg = function(x) 
-{
-    if ( !require(x, character.only = TRUE) ) 
-    {
-        if ( !(x %in% installed.packages()) ) 
-        {
-            print( paste0("[+] ", x, " package not installed. Installing...") )
-            install.packages(x) 
-            library(x, character.only = TRUE)
-        }
-        else
-        {
-            if( !library(x) )
-                print( paste0("[+] ", x, " package installed but could not be loaded") )
-        }
-    }
-    else
-        print( paste0("[+] ", x, " package loaded") )
-}
-
-pkg("shiny")
-pkg("ISLR")
-pkg("ggplot2")
-pkg("shinyjs")
-pkg("tidyverse")
-pkg("DT")
-pkg("naniar")
-pkg("shinyWidgets")
-pkg("shinythemes")
-pkg("plotly")
-pkg("colourpicker")
-pkg("ggthemes")
-pkg("datasets")
-pkg("car") # for VIF
-pkg("kableExtra") # for kable
-pkg("Hmisc")
-pkg("caret")
-pkg("caTools") # for ROC curve
-pkg("boot")
-pkg("GGally") # ggpairs
-pkg("shinycssloaders") # for progress indicator
-pkg("rpart") # for decision trees
-pkg("rpart.plot") # to print decision trees
-pkg("e1071")
+library(shiny)
+library(ISLR)
+library(ggplot2)
+library(shinyjs)
+library(tidyverse)
+library(DT)
+library(naniar)
+library(shinyWidgets)
+library(shinythemes)
+library(plotly)
+library(colourpicker)
+library(ggthemes)
+library(datasets)
+library(car) # for VIF
+library(kableExtra) # for kable
+library(Hmisc)
+library(caret)
+library(caTools) # for ROC curve
+library(boot)
+library(GGally) # ggpairs
+library(shinycssloaders) # for progress indicator
+library(rpart) # for decision trees
+library(rpart.plot) # to print decision trees
+library(e1071)
+library(broom)
 
 
 source("stats_module.R")
@@ -145,7 +124,8 @@ ui <- fluidPage(theme = "spacelab.min.css", title = "UW_thesis",
                     radioButtons("quote", "Quote",
                       choices = c(None = "", "Double Quote" = '"', "Single Quote" = "'"), selected = ""),
                     
-                    actionButton("displayFile", "Load file"),
+                    # Rownames
+                    #textInput("TI_rownames", "Row names column", value = 1, placeholder = "1", width = "100px"),
                     
                     # change to NA
                     tags$hr(style ="border-top: 1px solid #888888;"),
@@ -224,16 +204,6 @@ ui <- fluidPage(theme = "spacelab.min.css", title = "UW_thesis",
                         column(2,
                             actionButton("BTN_removeOutliers", label = "Go!")   
                         )
-                    ),
-                    
-                    # export dataset to CSV file
-                    tags$hr(style ="border-top: 1px solid #888888;"),
-                    HTML("<div align='center'><b>Export dataset to CSV file</b></div>"),
-                    br(),
-                    fluidRow(
-                      column(width = 2,
-                        actionButton("BTN_saveDataset", "Export")
-                      )
                     )
                     
                 ) # sidebarPanel
@@ -245,9 +215,10 @@ ui <- fluidPage(theme = "spacelab.min.css", title = "UW_thesis",
                         DT::dataTableOutput("dataset")
                     ),
                     
+                #tags$div(style = 'overflow-x: auto;',    
                     fluidRow(
                       # table with missing values
-                      column(width = 2,
+                      column(width = 2, #style = 'border: 1px solid #888888;',
                         h4(textOutput("TO_missingValues")),
                         tableOutput("showMissing")
                       ),
@@ -255,7 +226,7 @@ ui <- fluidPage(theme = "spacelab.min.css", title = "UW_thesis",
                       #column(width = 1), # make space between tables
                       
                       # table with potential outliers
-                      column(width = 3,
+                      column(width = 3, #style = 'border: 1px solid #888888;',
                         h4(textOutput("TO_outliersLabel")),
                         tableOutput("TA_outliersTable")
                       )
@@ -356,7 +327,7 @@ server = function(input, output, session) {
         
     })
         
-######## Display header of file uploaded by user ########
+######## Display file uploaded by user ########
     observeEvent(input$fileName, {
         tryCatch(
             {
@@ -622,12 +593,6 @@ server = function(input, output, session) {
       if (!is.null(input$dataset_rows_selected)) {
         df$x <- df$x[-as.numeric(input$dataset_rows_selected),]
       }
-    })
-    
-    # save dataset to CSV file
-    observeEvent(input$BTN_saveDataset, {
-      temp = df$x
-      write.csv(temp, file = "exportedDataset.csv", quote = FALSE)
     })
     
 } #  end of server function

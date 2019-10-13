@@ -150,9 +150,16 @@ binomialGLM <- function(input, output, session, dataset, id) {
     confusionMatrix(myModel()$pred, myModel()$test_set[input$SI_dependentVar][ , 1])
   })
      
-  output$TO_predictedValues = renderTable({
-    data.frame("Names" = rownames(myModel()$test_set), "Predictions" = myModel()$pred, "Actuals" = myModel()$test_set[input$SI_dependentVar][ , 1], stringsAsFactors = FALSE)
-  })
+  #output$TO_predictedValues = renderTable({
+  output$TO_predictedValues = function() {
+    result = data.frame("Names" = rownames(myModel()$test_set), "Predictions" = myModel()$pred, "Actuals" = myModel()$test_set[input$SI_dependentVar][ , 1], stringsAsFactors = FALSE)
+    result = as.tibble(result)
+    result %>% mutate(
+      Predictions = cell_spec(Predictions, "html", color = ifelse(Predictions != Actuals, "red", "black"))
+    ) %>%
+      knitr::kable(format = "html", escape = FALSE) %>%
+      kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+  }
   
   output$PO_ROCcurve = renderPlot({
     colAUC(as.numeric(myModel()$pred), myModel()$test_set[[input$SI_dependentVar]], plotROC = TRUE)
