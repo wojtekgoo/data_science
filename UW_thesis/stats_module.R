@@ -10,122 +10,211 @@ source("ggpairs.R")
 stats_moduleUI <- function(id) {
   ns <- NS(id)
   
-  tagList(
+  #tagList(
     div(
-    fluidRow(
-      column(width = 10,
-        verbatimTextOutput(ns("TO_summaryWhole"))
-      ),
-      column(width = 2,
-        h4(textOutput(ns("TO_ShapiroWilkLabel"))),
-        verbatimTextOutput(ns("TO_ShapiroWilk"))
-      )
-    ),
-    
-    fluidRow(
-      column(width = 4,
-        panel(
-          heading = "Module : apply_function",
-          status = "warning", # to apply color to the panel border
-          apply_functionUI(id = ns("mod1"))
-        ),
+      tabsetPanel(type = "tabs",
+          tabPanel("Summary",
+              fluidRow(
+                column(width = 4,
+                  radioButtons(ns("RB_summaryType"), "", choices = c("Hmisc", "head", "summary", "str", "dfSummary", "descr"), selected = "Hmisc", inline = TRUE)       
+                )
+              ),
+          
+              fluidRow(
+                column(width = 8,
+                  verbatimTextOutput(ns("TO_summaryWhole"))
+                 ),
+                column(width = 4,
+                  column(12,
+                    h4(textOutput(ns("TO_NormalityTestsLabel"))),
+                    htmlOutput(ns("TO_NormalityTests")),    # kable returns HTML so render table with htmlOutput (else it'll print HTML code)
+                    br(),
+                    h4(textOutput(ns("TO_QQplotLabel"))),
+                    selectInput(ns("SI_QQplot"), label = "", choices = NULL),
+                    plotOutput(ns("PO_QQplot"))
+                  )
+                )
+              ),
+          ),
+          
+          tabPanel("Plots",
+            fluidRow(
+              column(width = 4,
+                panel(
+                  heading = "Module : apply_function",
+                  status = "warning", # to apply color to the panel border
+                  apply_functionUI(id = ns("mod1"))
+                ),
         
-        panel(
-          heading = "Module : apply_scale",
-          status = "danger",
-          apply_scaleUI(id = ns("mod2"))
-        ),
+                panel(
+                  heading = "Module : apply_scale",
+                  status = "danger",
+                  apply_scaleUI(id = ns("mod2"))
+                ),
         
-        panel(
-          heading = "Module : funHistory",
-          status = "default",
-          funHistoryUI(id = ns("mod3"))
-        )
-      ),
+                panel(
+                  heading = "Module : funHistory",
+                  status = "default",
+                  funHistoryUI(id = ns("mod3"))
+                )
+              ),
       
-      column(width = 8,
-        panel(
-          heading = "Module : scatterplot",
-          status = "success",
-          scatterplotUI(id = ns("mod4"))
-        )
-      )
-    ),
+              column(width = 8,
+                panel(
+                  heading = "Module : scatterplot",
+                  status = "success",
+                  scatterplotUI(id = ns("mod4"))
+                )
+              )
+            ),
     
-    br(),
+            br(),
     
-    fluidRow(
-      column(width = 6,
-        panel(
-          heading = "Module : boxplot",
-          status = "primary",
-          boxplotUI(id = ns("mod5"))
-        )
-      ),
+            fluidRow(
+              column(width = 6,
+                panel(
+                  heading = "Module : boxplot",
+                  status = "primary",
+                  boxplotUI(id = ns("mod5"))
+                )
+              ),
       
-      column(width = 6,
-        panel(
-          heading = "Module : histogram / barplot",
-          status = "info",
-          histogramUI(id = ns("mod6"))
-        )
-      )
-    ),
+              column(width = 6,
+                panel(
+                  heading = "Module : histogram / barplot",
+                  status = "info",
+                  histogramUI(id = ns("mod6"))
+                )
+              )
+            ),
     
-    br(),
+            br(),
 
-    fluidRow(
-      column(width = 12,
-        panel(
-          heading = "Module : plot matrix",
-          ggPairsUI(id = ns("mod7"))
-        )
-      )
-    )
-
+            fluidRow(
+              column(width = 12,
+                panel(
+                  heading = "Module : plot matrix",
+                  ggPairsUI(id = ns("mod7"))
+                )
+              )
+            )
+          ) # tabPanel
+      ) # tabset
     ) #div
-  ) #taglist
+  #) #taglist
 }
 
 
 stats_module <- function(input, output, session, dataset, id) {
     ns <- session$ns
+    req(dataset)
+
     # ReactiveValue that "belongs" to Application and updates through all modules
     rv <- reactiveValues(df = dataset, variable = NULL, fun_history = NULL)
-
+    choices = colnames( dplyr::select_if(dataset, is.numeric) )
+    updateSelectInput(session, "SI_QQplot", choices = choices, selected = '')
+    
     # Summary
     output$TO_summaryWhole <- renderPrint({
       req(rv$df)
-      # html code is printed instead of nice output
-      # html = summary(rv$df) %>% kable() %>% kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive", full_width = F)) %>%
-      #   scroll_box(width = "100%", height = "100%")
-      print(class(rv$df))
-      # print character vector without quotes and indices (Hmisc::describe cannot be printed out directly)
-      d = capture.output(Hmisc::describe(rv$df))
-      paste(noquote(d), collapse = '\n') %>% cat()
+
+      switch(input$RB_summaryType,
+        head = {
+          head(rv$df)
+        },
+
+        summary = {
+          summary(rv$df)
+        },
+
+        str = {
+          str(rv$df)
+        },
+
+        Hmisc = {
+          # html code is printed instead of nice output
+          # html = summary(rv$df) %>% kable() %>% kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive", full_width = F)) %>%
+          #   scroll_box(width = "100%", height = "100%")
+          print(class(rv$df))
+          # print character vector without quotes and indices (Hmisc::describe cannot be printed out directly)
+          out = capture.output(Hmisc::describe(rv$df))
+          paste(noquote(out), collapse = '\n') %>% cat()
+        },
+
+        dfSummary = {
+          summarytools::dfSummary(rv$df)
+        },
+
+        descr = {
+          summarytools::descr(rv$df)
+        },
+
+        {
+          head(rv$df)  # default
+        }
+
+      )
+
+    })
+    
+    # normality tests
+    
+    output$TO_NormalityTestsLabel = renderText({
+      "Normality tests for numeric columns"
     })
     
     # shapiro.wilk function wrapper
     sw = function(x) {
-      if(is.data.frame(x)) {
-        test = lapply(x, shapiro.test)
-        return( do.call(rbind.data.frame, test)[1:2] )
-      }
-    
-      test = shapiro.test(x)
-      data.frame("statistic" = test$statistic, "p.value" = test$p.value)
+      sw_test = lapply(x, shapiro.test)
+      ks_test = lapply(x, function(y) {
+        ks.test(y, "pnorm", mean = mean(y), sd = sd(y))
+      })
+      # Convert a list to a data frame
+      out_sw = do.call(rbind.data.frame, sw_test)[1:2]
+      out_ks = do.call(rbind.data.frame, ks_test)[1:2]
+      out = cbind(out_sw, out_ks)
+      
+      names(out)[1] = "D"
+      names(out)[2] = "p.val"
+      names(out)[3] = "W"
+      names(out)[4] = "p.val"
+      
+      return( format(round(out, 3), scientific = FALSE) )
     }
     
-    # normality test
-    output$TO_ShapiroWilk = renderPrint({
+    # render output table with normality tests
+    output$TO_NormalityTests = renderText({    # render HTML code so kable works nicely
       req(rv$df)
       numeric <- rv$df[sapply(rv$df, is.numeric)] 
-      sw(numeric)
+      res = sw(numeric)
+      # highlight p-values < 0.05 (not normal)
+      res[, 2] = ifelse(res[, 2] < 0.05, 
+                        cell_spec(res[, 2], background = "red", color = "white", align = "center"), 
+                        cell_spec(res[, 2], background = "lightgreen", color = "white", align = "center"))
+      res[, 4] = ifelse(res[, 4] < 0.05, 
+                        cell_spec(res[, 4], background = "red", color = "white", align = "center"), 
+                        cell_spec(res[, 4], background = "lightgreen", color = "white", align = "center"))
+      
+      res %>% 
+        knitr::kable("html", align='cccc', escape = F) %>% 
+        kable_styling(
+          bootstrap_options = c("striped", "hover", "responsive")
+        ) %>%
+        add_header_above(c(" ", "Shapiro-Wilk" = 2, "Kolmogorov-Smirnov" = 2))
     })
 
-    output$TO_ShapiroWilkLabel = renderText({
-      "Shapiro-Wilk normality test for numeric columns"
+
+    # Q-Q plot
+    output$TO_QQplotLabel = renderText({
+      "Q-Q plot"
     })
+    
+    output$PO_QQplot = renderPlot({
+      if( !is.null(dataset) && !(input$SI_QQplot == "") ) {
+        qqPlot(dataset[[input$SI_QQplot]], ylab = input$SI_QQplot)
+      }
+    })
+
     
     ##################################
     ## Module 1 : Apply Function  ####

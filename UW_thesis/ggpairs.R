@@ -24,27 +24,12 @@ ggPairs <- function(input, output, session, id, dataset = NULL) {
   
   ns <- session$ns
   
-  check_levels = function(x) {
-    result = 0
-    if(is.character(x)) result = unique(x)
-    if(is.factor(x)) result = length(levels(x))
-    
-    return(result)
-  }
-  
   output$PO_ggpairs = renderPlot({
     req(dataset())
     val = dataset()
     
     if(input$CB_stopRefreshing == FALSE) {
-      levels = sapply(dataset(), check_levels)
-      if(all(levels < 6)) {
-        ggpairs(val) + ggplot2::theme(axis.text = ggplot2::element_text(size = 3))
-      } else { # print empty plot with text output only
-        plot(c(0, 1), c(0, 1), ann = F, bty = 'n', type = 'n', xaxt = 'n', yaxt = 'n')
-        text(x = 0.5, y = 0.5, paste("Some columns have more than 6 levels. Plot will not be printed."), 
-                              cex = 1.6, col = "black")
-      }
+      ggpairs(val) + ggplot2::theme(axis.text = ggplot2::element_text(size = 3))
     }
   })
 

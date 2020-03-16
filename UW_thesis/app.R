@@ -1,33 +1,17 @@
+# Author: Wojciech Gusztyła
 
-# Author: Wojciech Gusztyla
-
-####### PACKAGES #######
-# check if package is installed. If not, then install it (-> avoid duplicate installation of pkgs)
-pkg = function(x) 
-{
-    if ( !require(x, character.only = TRUE) ) 
-    {
-        if ( !(x %in% installed.packages()) ) 
-        {
-            print( paste0("[+] ", x, " package not installed. Installing...") )
-            install.packages(x) 
-            library(x, character.only = TRUE)
-        }
-        else
-        {
-            if( !library(x) )
-                print( paste0("[+] ", x, " package installed but could not be loaded") )
-        }
-    }
-    else
-        print( paste0("[+] ", x, " package loaded") )
-}
+source("stats_module.R")
+source("linreg.R")  # linear regression model
+source("binomialGLM.R") # logistic regression model
+source("LDA.R") # Linear Discriminant Analysis
+source("decisionTree.R") # Decision tree
+source("external.R")
 
 pkg("shiny")
+pkg("car")  # for qqPlot and VIF
 pkg("ISLR")
 pkg("ggplot2")
 pkg("shinyjs")
-pkg("tidyverse")
 pkg("DT")
 pkg("naniar")
 pkg("shinyWidgets")
@@ -36,8 +20,9 @@ pkg("plotly")
 pkg("colourpicker")
 pkg("ggthemes")
 pkg("datasets")
-pkg("car") # for VIF
+pkg("knitr")
 pkg("kableExtra") # for kable
+pkg("formattable")
 pkg("Hmisc")
 pkg("caret")
 pkg("caTools") # for ROC curve
@@ -47,13 +32,11 @@ pkg("shinycssloaders") # for progress indicator
 pkg("rpart") # for decision trees
 pkg("rpart.plot") # to print decision trees
 pkg("e1071")
+pkg("tidyverse")
+pkg("ROCR") # ROC curve
+pkg("glue")
+pkg("summarytools")
 
-
-source("stats_module.R")
-source("linreg.R")  # linear regression model
-source("binomialGLM.R") # logistic regression model
-source("LDA.R") # Linear Discriminant Analysis
-source("decisionTree.R") # Decision tree
 
 remove_outliers <- function(x, na.rm = TRUE, ...) {
   qnt = quantile(x, probs=c(.25, .75), na.rm = na.rm, ...)
@@ -85,7 +68,7 @@ find_outliers = function(x, na.rm = TRUE) {
 
 ######## UI ########
 # Fluid page needed to have one title across all tabs
-ui <- fluidPage(theme = "spacelab.min.css", title = "UW_thesis",
+ui <- fluidPage(theme = "spacelab.min.css", title = "Dissertation",
 
     useShinyjs(),
     # TITLE
@@ -104,19 +87,24 @@ ui <- fluidPage(theme = "spacelab.min.css", title = "UW_thesis",
         tabPanel("Dataset",
             sidebarLayout(
                 tags$div(id = 'my_label', #style = ".sidebar { height: 90vh; overflow-y: auto; }",
-                sidebarPanel(width = 3,
+                sidebarPanel(width = 2,
+                             
+                    # select dataset
                     HTML("<div align='center'><b>Please select the dataset</b></div>"),
                     br(),
                     fluidRow(
-                        column(10,
+                        column(12,
                             # to select all packages from R 'datasets': choices = ls("package:datasets")
                             selectInput("BTN_datasets", label = NULL, choices = c("airquality", "iris", "mtcars", "rock", "quakes", ls("package:ISLR")), 
                             selected = "mtcars")
-                        ),
-                        column(2, 
-                            actionButton("BTN_load", label = "Go!")
                         )
                     ),
+                    fluidRow(
+                        column(12,
+                            actionButton("BTN_load", "Load dataset", width = "100%", icon = icon("play"), class = "btn-success")
+                        )
+                    ),
+                    
                     # upload CSV file
                     tags$hr(style ="border-top: 1px solid #888888;"),
                     HTML("<div align='center'><b>Or upload your own CSV file</b></div>"),
@@ -133,15 +121,12 @@ ui <- fluidPage(theme = "spacelab.min.css", title = "UW_thesis",
                     
                     checkboxInput("CB_header", "Header", TRUE),
                     checkboxInput("CB_stringsAsFactors", "Strings as factors", FALSE),
-                    
-                    # Input: Select separator
                     radioButtons("sep", "Separator",
                                  choices = c(Comma = ",",
                                              Semicolon = ";",
                                              Tab = "\t"),
                                  selected = ","),
                     
-                    # Input: Select quotes
                     radioButtons("quote", "Quote",
                       choices = c(None = "", "Double Quote" = '"', "Single Quote" = "'"), selected = ""),
                     
@@ -149,21 +134,18 @@ ui <- fluidPage(theme = "spacelab.min.css", title = "UW_thesis",
                     
                     # change to NA
                     tags$hr(style ="border-top: 1px solid #888888;"),
+                    tags$style(HTML(".my_centered{text-align: center;}")),
                     HTML("<div align='center'><b>Change value to NA</b></div>"),
-                    br(),
                     fluidRow(
-                      
-                      # tags$form(class="form-horizontal",
-                      #   tags$div(class="form-group",
-                      #     tags$label(class = "col-sm-3 control-label", `for` = "enterValue", "Enter value:"),
-                          column(10,
-                            textInput("TI_valueToChangeToNA", "Enter value")
-                          ),
-                          column(2,
-                            actionButton("BTN_changeToNA", "Go!")   
-                          )
-                      #   ) # form group
-                      # ) # form horizontal
+                      column(width = 12, align="center",
+                        uiOutput("UI_selectColumn")
+                      )
+                    ),
+                    fluidRow(
+                        column(12,
+                            textInput("TI_valueToChangeToNA", "", width = "50%"),
+                            actionButton("BTN_changeToNA", "Change")
+                        )
                     
                     ),
                     
@@ -172,14 +154,9 @@ ui <- fluidPage(theme = "spacelab.min.css", title = "UW_thesis",
                     HTML("<div align='center'><b>Convert variable type</b></div>"),
                     br(),
                     fluidRow(
-                        column(5,
-                            selectInput("SI_varToConvert", label = "Select variable:", choices = NULL, multiple = TRUE)
-                        ),
-                        column(5,
-                            selectInput("SI_convertTo", label = "Choose type:", choices = c("factor", "numeric", "character"))   
-                        ),
-                        column(2,
-                            actionButton("BTN_convert", label = "Go!")   
+                        div(style="display: block;vertical-align:top; width: 150px;",
+                            selectInput("SI_varToConvert", label = "Select variable:", choices = NULL, multiple = TRUE, selected = NULL),
+                            selectInput("SI_convertTo", label = "Choose type:", choices = NULL, selected = NULL)
                         )
                     ),
                     
@@ -188,27 +165,25 @@ ui <- fluidPage(theme = "spacelab.min.css", title = "UW_thesis",
                     HTML("<div align='center'><b>Recode factor levels</b></div>"),
                     br(),
                     fluidRow(
-                        column(4,
-                            selectInput("SI_factorToRecode", label = "Factor variable:", choices = NULL)
-                        ),
-                        column(3,
-                            textInput("TI_recodeFrom", label = "From:")   
-                        ),
-                        column(3,
+                        div(style="display: block;vertical-align:top; width: 150px;",
+                            selectInput("SI_factorToRecode", label = "Factor variable:", choices = NULL),
+                            textInput("TI_recodeFrom", label = "From:"),   
                             textInput("TI_recodeTo", label = "To:")   
-                        ),
-                        column(2,
-                            actionButton("BTN_recodeFactor", label = "Go!")   
                         )
                     ),
                     
                     # delete selected rows button
                     tags$hr(style ="border-top: 1px solid #888888;"),
                     HTML("<div align='center'><b>Delete selected rows</b></div>"),
+                    fluidRow(
+                      column(width = 12, align="center",
+                        uiOutput("UI_selectRow")
+                      )
+                    ),
                     br(),
                     fluidRow(
                       column(width = 2,
-                        actionButton("BTN_deleteRows", "Delete")
+                        actionButton("BTN_deleteRows", "Delete", class = "btn-danger")
                       )
                     ),
                       
@@ -217,23 +192,20 @@ ui <- fluidPage(theme = "spacelab.min.css", title = "UW_thesis",
                     HTML("<div align='center'><b>Remove outliers</b></div>"),
                     br(),
                     fluidRow(
-                        column(10,
+                        column(12,
                             selectInput("SI_removeOutliers", label = "Choose column:", choices = NULL)
-                        ),
-                        
-                        column(2,
-                            actionButton("BTN_removeOutliers", label = "Go!")   
                         )
                     ),
                     
-                    # export dataset to CSV file
+                    
+                    # save dataset
                     tags$hr(style ="border-top: 1px solid #888888;"),
-                    HTML("<div align='center'><b>Export dataset to CSV file</b></div>"),
+                    HTML("<div align='center'><b>Save dataset</b></div>"),
                     br(),
                     fluidRow(
-                      column(width = 2,
-                        actionButton("BTN_saveDataset", "Export")
-                      )
+                        column(12,
+                            downloadButton("BTN_saveDataset", label = "Save")
+                        )
                     )
                     
                 ) # sidebarPanel
@@ -245,19 +217,10 @@ ui <- fluidPage(theme = "spacelab.min.css", title = "UW_thesis",
                         DT::dataTableOutput("dataset")
                     ),
                     
+                    # row with outliers and NAs
                     fluidRow(
-                      # table with missing values
-                      column(width = 2,
-                        h4(textOutput("TO_missingValues")),
-                        tableOutput("showMissing")
-                      ),
-                      
-                      #column(width = 1), # make space between tables
-                      
-                      # table with potential outliers
-                      column(width = 3,
-                        h4(textOutput("TO_outliersLabel")),
-                        tableOutput("TA_outliersTable")
+                      column(width = 4, #style = 'border: 1px solid #888888;',
+                        tableOutput("HO_outliersAndMissing")
                       )
                     )
                 ) # mainPanel
@@ -319,9 +282,8 @@ ui <- fluidPage(theme = "spacelab.min.css", title = "UW_thesis",
 
 ######## SERVER ########
 server = function(input, output, session) {
-    df = reactiveValues(x = NULL) # store name of the loaded dataset to be available across modules
-    obs_closeStat <- list()
-    obs_closeML <- list()
+    df = reactiveValues(x = NULL) # store loaded dataset to be available across modules and its name
+    obs_close <- list()
 
 ######## Load dataset ########
     observeEvent(input$BTN_load, {
@@ -338,7 +300,11 @@ server = function(input, output, session) {
         # enable selection from current dataset variables
         choices <- colnames(df$x)
         updateSelectInput(session, "SI_varToConvert", choices = choices, selected = '')
-        updateSelectInput(session, "SI_removeOutliers", choices = choices, selected = '')
+        
+        numericCols = colnames(select_if(df$x, is.numeric))   # select only numeric columns
+        updateSelectInput(session, "SI_removeOutliers", choices = numericCols, selected = '')
+        
+        updateSelectInput(session, "SI_convertTo", choices = c("As factor", "As numeric", "As character"), selected = '')
         
         # fill SI_factorToRecode with existing factor columns
         factorChoices <- colnames(df$x[sapply(df$x, is.factor)])
@@ -364,9 +330,7 @@ server = function(input, output, session) {
                     header = input$CB_header,
                     sep = input$sep,
                     quote = input$quote,
-                    stringsAsFactors = input$CB_stringsAsFactors,
-                    row.names = 1,
-                    check.names = FALSE)
+                    stringsAsFactors = input$CB_stringsAsFactors)
             },
             error = function(e) {
                 # return a safeError if a parsing error occurs
@@ -385,7 +349,11 @@ server = function(input, output, session) {
         # enable selection from current dataset variables
         choices <- colnames(df$x)
         updateSelectInput(session, "SI_varToConvert", choices = choices, selected = '')
-        updateSelectInput(session, "SI_removeOutliers", choices = choices, selected = '')
+        
+        numericCols = colnames(select_if(df$x, is.numeric))   # select only numeric columns
+        updateSelectInput(session, "SI_removeOutliers", choices = numericCols, selected = '')
+        
+        updateSelectInput(session, "SI_convertTo", choices = c("As factor", "As numeric", "As character"), selected = '')
         
         # fill SI_factorToRecode with existing factor columns
         factorChoices <- colnames(df$x[sapply(df$x, is.factor)])
@@ -407,55 +375,58 @@ server = function(input, output, session) {
     observeEvent(input$BTN_changeToNA, {
       if (!is.null(input$dataset_columns_selected)) {
         df$x[ , input$dataset_columns_selected][df$x[ , input$dataset_columns_selected] == input$TI_valueToChangeToNA] = NA
+        # if we remove values from factor column, apply factor() to drop unused factor levels
+        if( is.factor( df$x[[input$dataset_columns_selected]] ) )
+          df$x[ , input$dataset_columns_selected] = factor( df$x[ , input$dataset_columns_selected] )
       }
     })
     
-    #output$showMissing = renderTable({
-    output$showMissing = function() {
+    output$UI_selectColumn = renderText({
+      if (is.null(input$dataset_columns_selected))
+        paste("(select column on dataset first)")
+    })
+    
+##### Print outliers and missing #####  
+    output$HO_outliersAndMissing = function() {
       req(df$x)
+      
+      # outliers
+      outl = sapply(df$x, find_outliers)
+      
+      # missing values
       # common_na_strings has bug: empty "" value spoils miss_scan_count results
       # recreate common_na_strings without ""
       na_strings = c("NA", "N A", "N/A", "NA ", " NA", "N /A", "N / A", "N / A ", "na", "n a", "n/a", "na ", " na", "n /a", "n / a", " a / a", "n / a ", "NULL", "null", "Not Available", "NOt available")
       na = sapply(df$x, function(y) sum(is.na(y))) # this will count NA's
-      miss_scan = miss_scan_count(df$x, na_strings) # this won't count NA's
-      result = miss_scan
-      result$n = miss_scan$n + na # add NA's manually to miss_scan_count results
+      miss_scan = miss_scan_count(df$x, na_strings) # this won't count NA's)
+      missing = miss_scan$n + na # add NA's manually to miss_scan_count results
       
-      # pretty print with kable
-      result %>% mutate(
-        n = ifelse(n !=0, cell_spec(n, "html", background = "red", color = "white", align = "center"), n)
-      ) %>%
-        knitr::kable(format = "html", escape = FALSE) %>%
+      df = data.frame("missing" = missing, "outliers" = outl)
+      df$missing = ifelse(missing !=0, cell_spec(missing, "html", background = "red", color = "white", align = "center"), missing)
+      df %>%
+        knitr::kable(format = "html", align = 'cc', escape = FALSE) %>%
         kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
     }
     
-##### Print outliers #####  
-    #output$TA_outliersTable = renderTable({
-    output$TA_outliersTable = function() {
-      req(df$x)
-      res = sapply(df$x, find_outliers)
-      result = data.frame("Variable" = names(res), "outliers" = res)
-      
-      # pretty print with kable
-      result = as.tibble(result)
-      result %>% 
-        knitr::kable(format = "html", escape = FALSE) %>%
-        kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
-    }
+#### Remove outliers from selected column #####
+    observeEvent(input$SI_removeOutliers, {
+        df$x[input$SI_removeOutliers] = remove_outliers(unlist(df$x[input$SI_removeOutliers]))
+    })
+    
     
 ##### Convert to other type #####
-    observeEvent(input$BTN_convert, {
-    
+    observeEvent(input$SI_convertTo, {
+        req(df$x)
         cols = input$SI_varToConvert 
         
         # convert to factor
-        if(input$SI_convertTo == "factor") {
+        if(input$SI_convertTo == "As factor") {
             #temp = as.factor( unlist(df$x[input$SI_varToConvert]) )   - other way to do it
             #df$x[input$SI_varToConvert] = temp
             df$x[cols] = lapply(df$x[cols], as.factor)
             
         # convert to numeric    
-        } else if (input$SI_convertTo == "numeric") {
+        } else if (input$SI_convertTo == "As numeric") {
             # if var is a factor, get first its levels and convert them back to numeric
             if( is.factor(unlist(df$x[input$SI_varToConvert])) ) {
                 df$x[cols] = lapply(df$x[cols], as.character)
@@ -473,18 +444,31 @@ server = function(input, output, session) {
         # fill selection box with factor variables
         factorChoices <- colnames(df$x[sapply(df$x, is.factor)])
         updateSelectInput(session, "SI_factorToRecode", choices = factorChoices)
-
+        # reset selectInpiut box not to show anything
+        updateSelectInput(session, "SI_convertTo", choices = c("As factor", "As numeric", "As character"), selected = '')
+        
+        # update remove outliers box to show only numeric cols
+        numericCols = colnames(select_if(df$x, is.numeric))   # select only numeric columns
+        updateSelectInput(session, "SI_removeOutliers", choices = numericCols, selected = '')
     })
     
-    observeEvent(input$BTN_recodeFactor, {
+    observeEvent(input$TI_recodeTo, {
         temp = as.factor(unlist(df$x[input$SI_factorToRecode])) # subsetting df results in class df - change it back to factor
         levels(temp)[levels(temp) == input$TI_recodeFrom] = input$TI_recodeTo # amend factor level
         df$x[input$SI_factorToRecode] = temp
     })
+  
     
-#### Remove outliers from selected column #####
-    observeEvent(input$BTN_removeOutliers, {
-      df$x[input$SI_removeOutliers] = remove_outliers(unlist(df$x[input$SI_removeOutliers]))
+#### Delete selected rows    
+    observeEvent(input$BTN_deleteRows, {
+      if (!is.null(input$dataset_rows_selected)) {
+        df$x <- df$x[-as.numeric(input$dataset_rows_selected),]
+      }
+    })
+    
+    output$UI_selectRow = renderText({
+      if (is.null(input$dataset_rows_selected))
+        paste("(select row on dataset first)")
     })
     
 ##### Other #####
@@ -498,39 +482,39 @@ server = function(input, output, session) {
     # Add a new tab with modules
 
     # create tab title and add cross to close
-    tabStatTitle = function(idStat) {
+    tabStatTitle = function(id) {
         tags$span(
-            "Stats ", idStat, HTML("&nbsp;"),
+            "Stats ", id, HTML("&nbsp;"),
             tags$span(
-                id = paste0("closeStat", idStat),
+                id = paste0("close", id),
                 class = "close",
                 HTML("&times;")
             )
         )
     }
 
-    addStatTab = function(idStat, dset) {
+    addStatTab = function(id, dset) {
         
-        resStat[[paste(idStat)]] <- callModule(
+        resStat[[paste(id)]] <- callModule(
            module = stats_module,
            dataset = dset,
-           id = idStat
+           id = id
         )
         
         appendTab(
             inputId = "stats_all_tabs",
             tabPanel(
-                title = tabStatTitle(idStat),
-                value = idStat,
+                title = tabStatTitle(id),
+                value = id,
                 br(),
-                stats_moduleUI(id = idStat)
+                stats_moduleUI(id = id)
             ),
             select = TRUE
         )
         
         # call closing function
-        obs_closeStat[[paste(idStat)]] <<- observe({
-            shinyjs::onclick(id = paste0("closeStat", idStat), closeStatTab(id = idStat))
+        obs_close[[paste(id)]] <<- observe({
+            shinyjs::onclick(id = paste0("close", id), closeStatTab(id = id))
         })
         
         print("STAT tab created")
@@ -538,12 +522,12 @@ server = function(input, output, session) {
     }
     
     # close tab
-    closeStatTab <- function(idStat) {
-        print(paste0("Closing STAT tab ", idStat))
+    closeStatTab <- function(id) {
+        print(paste0("Closing STAT tab ", id))
         # Remove tab from UI
-        removeTab(inputId = "stats_all_tabs", target = paste(idStat))
+        removeTab(inputId = "stats_all_tabs", target = paste(id))
         # Remove related element from list
-        resStat[[paste(idStat)]] = NULL
+        resStat[[paste(id)]] = NULL
     }
     
     # call addTab after button click
@@ -556,18 +540,18 @@ server = function(input, output, session) {
 ##### ML tab #####
     # Add a new tab with modules
     
-    tabMLtitle = function(idML) {
+    tabMLtitle = function(id) {
         tags$span(
-            "Model ", idML, HTML("&nbsp;"),
+            "Model ", id, HTML("&nbsp;"),
             tags$span(
-                id = paste0("closeML", idML),
+                id = paste0("close", id),
                 class = "close",
                 HTML("&times;")
             )
         )
     }
     
-    addMLTab = function(idML, dataset) {
+    addMLTab = function(id, dataset) {
         
         model_type = switch(input$SI_selectModel, 
                             "Linear regression" = "linreg", 
@@ -577,38 +561,38 @@ server = function(input, output, session) {
                             )
         model_typeUI = paste0(model_type, "UI")
         
-        resML[[paste(idML)]] <- callModule(
+        resML[[paste(id)]] <- callModule(
            module = get(model_type),
            dataset = dataset,
-           id = idML
+           id = id
         )
         
         appendTab(
             inputId = "ml_all_tabs",
             tabPanel(
-                title = tabMLtitle(idML),
-                value = idML,
+                title = tabMLtitle(id),
+                value = id,
                 br(),
-                get(model_typeUI)(id = idML)
+                get(model_typeUI)(id = id)
             ),
             select = TRUE
         )
         
         # call closing function
-        obs_closeML[[paste(idML)]] <<- observe({
-            shinyjs::onclick(id = paste0("closeML", idML), closeMLTab(id = idML))
+        obs_close[[paste(id)]] <<- observe({
+            shinyjs::onclick(id = paste0("close", id), closeMLTab(id = id))
         })
         
         print("ML tab created")
     }
     
     # close tab
-    closeMLTab <- function(idML) {
-        print(paste0("Closing ML tab ", idML))
+    closeMLTab <- function(id) {
+        print(paste0("Closing ML tab ", id))
         # Remove tab from UI
-        removeTab(inputId = "ml_all_tabs", target = paste(idML))
+        removeTab(inputId = "ml_all_tabs", target = paste(id))
         # Remove related element from list
-        resML[[paste(idML)]] = NULL
+        resML[[paste(id)]] = NULL
     }
     
     # call addTab after button click
@@ -617,18 +601,12 @@ server = function(input, output, session) {
         addMLTab(id = counterML$counterValue, dataset = df$x)
     })
     
-    
-    observeEvent(input$BTN_deleteRows, {
-      if (!is.null(input$dataset_rows_selected)) {
-        df$x <- df$x[-as.numeric(input$dataset_rows_selected),]
+    output$BTN_saveDataset = downloadHandler(
+      filename = function() { paste(input$BTN_datasets, "_", Sys.Date(), ".csv", sep = "") },
+      content = function(file) {
+          write.csv(df$x, file, row.names = F)
       }
-    })
-    
-    # save dataset to CSV file
-    observeEvent(input$BTN_saveDataset, {
-      temp = df$x
-      write.csv(temp, file = "exportedDataset.csv", quote = FALSE)
-    })
+    )
     
 } #  end of server function
 

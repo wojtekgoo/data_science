@@ -1,19 +1,19 @@
 decisionTreeUI <- function(id) {
   ns <- NS(id)
-
+  
   div(
     fluidRow(
       column(width = 12,
         sidebarLayout(
       
           # sidebarPanel
-          sidebarPanel(
+          sidebarPanel(width = 2,
             
             # formula
             h4("Create formula"),
             fluidRow(
-              selectInput(ns("SI_dependentVar"), "Dependent var", choices = NULL, selected = NULL),
-              selectInput(ns("SI_independentVar"), "Independent variables", choices = NULL, selected = NULL, multiple = TRUE)
+              selectInput(ns("SI_dependentVar"), "Dependent", choices = NULL, selected = NULL),
+              selectInput(ns("SI_independentVar"), "Explanatory", choices = NULL, selected = NULL, multiple = TRUE)
             ),
             
             tags$hr(style ="border-top: 1px solid #888888;"),
@@ -21,7 +21,8 @@ decisionTreeUI <- function(id) {
             # model control
             h4("Control options"),
             fluidRow(
-              textInput(ns("TI_maxDepth"), "Max tree depth", width = '100px', placeholder = "10"),
+              textInput(ns("TI_maxDepth"), "Max tree depth", width = '100px', placeholder = "8"),
+              textInput(ns("TI_minsplit"), "Minimum split", width = '100px', placeholder = "10"),
               textInput(ns("TI_cp"), "cp", width = '100px', placeholder = "0.001")
             ),
             
@@ -29,9 +30,9 @@ decisionTreeUI <- function(id) {
             tags$hr(style ="border-top: 1px solid #888888;"),
             
             # split into train and test sets
-            h4("Allocate observations to the train set"),
+            h4("Create train set"),
             fluidRow(
-              textInput(ns("TI_trainSet"), "train set %", width = '100px', value = "70")
+              textInput(ns("TI_trainSet"), "0-100%", value = "70", width = '100px')
             ),
             
             tags$hr(style ="border-top: 1px solid #888888;"),
@@ -45,25 +46,42 @@ decisionTreeUI <- function(id) {
             
             conditionalPanel(
               condition = paste0('input[\'', ns('RB_resamplingMethod'), "\'] == \'kfold\'"),
-              textInput(ns("TI_kfoldNumber"), "# of k", width = '100px')
+              textInput(ns("TI_kfoldNumber"), "# of k", value = "4", width = '100px')
             ),
             
-            fluidRow(
-              actionButton(ns("BTN_fitModel"), "Fit model")
-            )
+            tags$hr(style ="border-top: 1px solid #888888;"),
             
+            # set random seed
+            h4("Set random seed"),
+            fluidRow(
+              radioButtons(ns("RB_randomSeed"), label = "", 
+                           choices = c("Random" = "random", "Not random" = "notrandom"), selected = "random")
+            ),
+            
+            conditionalPanel(
+              condition = paste0('input[\'', ns('RB_randomSeed'), "\'] == \'notrandom\'"),
+              textInput(ns("TI_seed"), "", value = "1", width = '100px')
+            ),
+            
+            # fit model
+            tags$hr(style ="border-top: 1px solid #888888;"),
+            actionButton(ns("BTN_fitModel"), "Fit model", class = "btn-success"),
+            
+            # export model to RDS file
+            tags$hr(style ="border-top: 1px solid #888888;"),
+            downloadButton(ns("BTN_exportModel"), "Export model")
           ),
          
           # mainPanel
-          mainPanel(
+          mainPanel(width = 10,
             
             fluidRow(
-              column(width = 7,
+              column(width = 6,
                 h4(textOutput(ns("TO_summaryLabel"))),
                 verbatimTextOutput(ns("TO_modelSummary"))
               ),
               
-              column(width = 5,
+              column(width = 6,
                 h4(textOutput(ns("TO_cpLabel"))),
                 verbatimTextOutput(ns("TO_cpTable")),
                 plotOutput(ns("PO_cpPlot"))
@@ -72,12 +90,13 @@ decisionTreeUI <- function(id) {
             
             fluidRow(
               # column(width = 6,
+                #downloadButton(ns("BTN_savePlot"), ""),
                 plotOutput(ns("PO_rpartPlot"))
             ),
             
             fluidRow(
               column(width = 6,
-                tableOutput(ns("TO_predictedValues"))
+                htmlOutput(ns("TO_predictedValues"))
               )
             )
             
@@ -91,7 +110,13 @@ decisionTreeUI <- function(id) {
 
 decisionTree <- function(input, output, session, dataset, id) {
   ns <- session$ns
+  req(dataset)
   
+  v <- reactiveValues()
+  observe({
+    v$depvar = input$SI_dependentVar
+    v$expvar = input$SI_independentVar
+  })
   
   # printcp function modified not to print model formula
   my_printcp = function (x, digits = getOption("digits") - 2L) 
@@ -126,45 +151,66 @@ decisionTree <- function(input, output, session, dataset, id) {
   # remove NA's
   dataset = na.omit(dataset)
   
+  # remove LOOCV option if dataset too big
+  if(nrow(dataset) > 100)
+    updateRadioButtons(session, "RB_resamplingMethod", label = "", choices = c("None" = "none", "K-fold CV" = "kfold"), selected = "none")
+  
   # enable selection from current dataset variables
   choices <- colnames(dataset)
   updateSelectInput(session, "SI_independentVar", choices = choices, selected = '')
-  updateSelectInput(session, "SI_dependentVar", choices = choices)
+  updateSelectInput(session, "SI_dependentVar", choices = choices, selected = '')
   
   # create model  
-  myModel = eventReactive(input$BTN_fitModel, {
+  m = eventReactive(input$BTN_fitModel, {
+    
+    req(v$depvar)
+    req(v$expvar)
+    req(as.numeric(input$TI_trainSet)/100 > 0 && as.numeric(input$TI_trainSet)/100 <= 1)
+
+    if(input$RB_randomSeed == 'notrandom') set.seed(input$TI_seed)
+    
     # divide observations into train and test splits
-    index <- createDataPartition(dataset[[input$SI_dependentVar]], p = as.numeric(input$TI_trainSet)/100, list = FALSE)
+    index <- createDataPartition(dataset[[v$depvar]], p = as.numeric(input$TI_trainSet)/100, list = FALSE)
     train_set = dataset[index, ]
     test_set = dataset[-index, ]
     
     # formula
-    formula = as.formula(paste(input$SI_dependentVar,'~', paste(input$SI_independentVar, collapse = "+")))
+    formula = as.formula(paste(v$depvar,'~', paste(v$expvar, collapse = "+")))
     
     # choose resampling method
     if(input$RB_resamplingMethod == "none")
-      xval <- 0
+      resamples <- 0
     else if (input$RB_resamplingMethod == "kfold")
-      xval = as.numeric(input$TI_kfoldNumber)
+      resamples = as.numeric(input$TI_kfoldNumber)
     else
-      xval = nrow(dataset)
+      resamples = nrow(dataset)
     
     # Train and predict  
     # if y is factor or character, use classification model
-    if ( is.factor(dataset[[input$SI_dependentVar]]) || is.character(dataset[[input$SI_dependentVar]]) ) {
-      model = rpart(formula, data = train_set, method = "class", model = TRUE, 
-                    control = rpart.control(maxdepth = ifelse(input$TI_maxDepth == "", 10, as.numeric(input$TI_maxDepth)),
+    if ( is.factor(dataset[[v$depvar]]) || is.character(dataset[[v$depvar]]) ) {
+      type = "class"
+      model = rpart(formula, 
+                    data = train_set, 
+                    method = "class", 
+                    model = TRUE,
+                    control = rpart.control(
+                                            minsplit = ifelse(input$TI_minsplit == "", 10, as.numeric(input$TI_minsplit)),
+                                            maxdepth = ifelse(input$TI_maxDepth == "", 5, as.numeric(input$TI_maxDepth)),
                                             cp = ifelse(input$TI_cp == "", 0.001, as.numeric(input$TI_cp)),
-                                            xval = xval
+                                            xval = resamples
                                             ))
+      
       predictions = predict(model, newdata = test_set, type = "class")
     }
     # else assume y is numeric and do regression
     else {
+      type = "anova"
       model = rpart(formula, data = train_set, method = "anova", model = TRUE, 
-                    control = rpart.control(maxdepth = ifelse(input$TI_maxDepth == "", 30, as.numeric(input$TI_maxDepth)),
+                    control = rpart.control(
+                                            minsplit = ifelse(input$TI_minsplit == "", 10, as.numeric(input$TI_minsplit)),
+                                            maxdepth = ifelse(input$TI_maxDepth == "", 5, as.numeric(input$TI_maxDepth)),
                                             cp = ifelse(input$TI_cp == "", 0.001, as.numeric(input$TI_cp)),
-                                            xval = xval
+                                            xval = resamples
                                             ))
       predictions = predict(model, newdata = test_set)
     }
@@ -179,36 +225,72 @@ decisionTree <- function(input, output, session, dataset, id) {
    
 
     # return results
-    x = list(model = model, pred = predictions, test_set = test_set)
+    x = list(model = model, pred = predictions, test_set = test_set, type = type)
     x
       
   })
   
 
   output$TO_modelSummary = renderPrint({
-    summary( myModel()$model )
+    summary.rpart.project( m()$model, depvar = isolate(v$depvar), expvar = isolate(v$expvar) )
   })
     
   output$TO_cpTable = renderPrint({
-    my_printcp(myModel()$model)
+    my_printcp( m()$model )
   })
   
   output$PO_cpPlot = renderPlot({
     # plot cp only when cross-validation has been selected
-    try( plotcp(myModel()$model) )
+    if( input$RB_resamplingMethod == "kfold" && m()$model$control$xval != 0 ) {
+        plotcp(m()$model)
+    }
   })
     
-  #output$TO_predictedValues = renderTable({
   output$TO_predictedValues = function() {
-    result = data.frame("Names" = rownames(myModel()$test_set), "Predictions" = myModel()$pred, "Actuals" = myModel()$test_set[input$SI_dependentVar][ , 1], stringsAsFactors = FALSE)
-    result = as.tibble(result)
-    result %>%
-      knitr::kable(format = "html", escape = FALSE, digits = 2) %>%
-      kable_styling(bootstrap_options = c("striped", "hover", "condensed"))  
+    df = data.frame("Names" = rownames(m()$test_set), 
+                    "Predictions" = m()$pred, 
+                    "Actuals" = isolate( m()$test_set[[v$depvar]] ), 
+                    stringsAsFactors = FALSE)
+    
+    if(m()$type == "class") {
+      df %>% mutate(
+          Predictions = cell_spec(Predictions, "html", color = ifelse(Predictions != Actuals, "red", "black"))
+        ) %>%
+          knitr::kable(format = "html", align = 'cc', escape = FALSE) %>%
+          kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+      
+    } else {
+      
+    df = df %>%
+      dplyr::mutate("+/-" = round(Actuals - Predictions, 2))
+    
+    df %>%
+      knitr::kable("html", align='ccc', escape = F) %>%
+      kable_styling(
+        bootstrap_options = c("hover", "responsive")
+      )
+    }
   }
   
   output$PO_rpartPlot = renderPlot({
-   rpart.plot(myModel()$model, fallen.leaves = TRUE)
+    rpart.plot(m()$model)
   })
-
+  
+  # export model to RDS file
+  output$BTN_savePlot = downloadHandler(
+    filename = function() { paste0("dectree_plot_",  Sys.Date(), ".png") },
+    content = function(file) {
+      png(file)
+      rpart.plot(m()$model)
+      dev.off()
+    }
+  )
+  
+  # export model to RDS file
+  output$BTN_exportModel = downloadHandler(
+    filename = function() { paste0("dectree", "_", Sys.Date(), ".rds") },
+    content = function(con) {
+      saveRDS(m()$model, file = con)
+    }
+  )
 }
