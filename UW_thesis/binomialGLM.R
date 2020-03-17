@@ -148,14 +148,14 @@ binomialGLM <- function(input, output, session, dataset, id) {
   # Show panel with interaction terms
   output$UI_interactionTerms = renderUI({
     choices = NULL
-    vars = v$depvar
+    vars = v$expvar
     
     if (is_empty(input$RB_interactions) || input$RB_interactions == "None") {
       return()
     }  
     
     if(input$RB_interactions != "None") {
-      numeric = colnames( dplyr::select_if(dataset, is.numeric)[vars] )
+      numeric = colnames( dplyr::select_if(dataset[vars], is.numeric) )
       if (length(numeric) > 0) {
         choices <- qterms(numeric, input$RB_interactions)
         

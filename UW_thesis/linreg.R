@@ -160,8 +160,8 @@ linreg <- function(input, output, session, dataset, id) {
       return()
     }  
     
-    if(input$RB_interactions != "None") {
-        numeric = colnames( dplyr::select_if(dataset, is.numeric)[vars] )
+    if( !is_empty(input$RB_interactions) && input$RB_interactions != "None") {
+        numeric = colnames( dplyr::select_if(dataset[vars], is.numeric) )
           if (length(numeric) > 0) {
             choices <- qterms(numeric, input$RB_interactions)
 
