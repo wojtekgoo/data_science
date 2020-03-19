@@ -142,7 +142,7 @@ stats_module <- function(input, output, session, dataset, id) {
         },
 
         dfSummary = {
-          summarytools::dfSummary(rv$df)
+          summarytools::dfSummary(rv$df, style = "grid")
         },
 
         descr = {
